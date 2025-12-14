@@ -1,0 +1,105 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.env
+.venv
+venv/
+env/
+
+# =========================
+# Jupyter Notebooks
+# =========================
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+.history/
+
+# PyCharm / IntelliJ
+.idea/
+
+# =========================
+# Logs & Temp Files
+# =========================
+*.log
+logs/
+tmp/
+temp/
+
+# =========================
+# Data & Artifacts (RAG-specific)
+# =========================
+data/
+datasets/
+corpus/
+raw_data/
+
+# Vector stores / embeddings
+faiss_index/
+chroma/
+weaviate/
+milvus/
+qdrant/
+*.faiss
+*.index
+*.bin
+
+# GraphRAG / graph artifacts
+graph/
+graphs/
+neo4j/
+*.graphml
+
+# =========================
+# Model & Cache Files
+# =========================
+models/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+
+# LLM / HF cache
+.cache/
+huggingface/
+hf_cache/
+
+# =========================
+# Evaluation Outputs
+# =========================
+results/
+metrics/
+evaluation_outputs/
+reports/
+
+# =========================
+# Secrets & Config
+# =========================
+.env.local
+.env.production
+.env.development
+*.key
+*.pem
+secrets.yaml
+secrets.json
+
+# =========================
+# Build / Packaging
+# =========================
+build/
+dist/
+*.egg-info/
