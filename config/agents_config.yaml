@@ -1,0 +1,264 @@
+# Multi-Agent RAG System Configuration
+# 
+# This file configures all agents in the system.
+# Adjust paths and parameters based on your setup.
+
+# Global settings
+global:
+  device: "cpu"  # "cpu" or "cuda"
+  cache_enabled: true
+  cache_dir: "cache"
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_dir: "logs"
+
+# Agent configurations
+agents:
+  
+  # ══════════════════════════════════════════════════════════
+  # Query Understanding Agent
+  # ══════════════════════════════════════════════════════════
+  query_understanding:
+    name: "query_understanding"
+    type: "query_understanding"
+    enabled: true
+    config:
+      # spaCy models for entity extraction
+      spacy_model_en: "en_core_web_sm"
+      spacy_model_de: "de_core_news_sm"
+      
+      # Query expansion
+      expand_queries: true
+      max_expansions: 3
+  
+  # ══════════════════════════════════════════════════════════
+  # Retriever Agents
+  # ══════════════════════════════════════════════════════════
+  bm25_retriever:
+    name: "bm25_retriever"
+    type: "bm25_retriever"
+    enabled: true
+    config:
+      # Path to BM25 index (from Step 2.1)
+      index_path: "data/indices/bm25_index.pkl"
+      
+      # Number of results to retrieve
+      top_k: 20
+      
+      # BM25 parameters
+      k1: 1.5
+      b: 0.75
+      
+      # Multilingual support
+      translate_query: true
+      
+  dense_retriever:
+    name: "dense_retriever"
+    type: "dense_retriever"
+    enabled: true
+    config:
+      # Embedding model
+      model_name: "intfloat/multilingual-e5-large"
+      
+      # Vector index path
+      index_path: "data/indices/dense_index"
+      
+      # Retrieval settings
+      top_k: 20
+      similarity_metric: "cosine"  # cosine, dot_product, euclidean
+      
+      # Performance
+      batch_size: 32
+      normalize_embeddings: true
+      
+  graphrag_retriever:
+    name: "graphrag_retriever"
+    type: "graphrag_retriever"
+    enabled: true
+    config:
+      # Graph paths (from GraphRAG processing)
+      graph_path: "data/graphrag/graph.pkl"
+      entity_index_path: "data/graphrag/entity_index.pkl"
+      
+      # Retrieval settings
+      top_k: 20
+      max_hops: 2  # How far to traverse in graph
+      
+      # Entity linking
+      entity_threshold: 0.7
+  
+  # ══════════════════════════════════════════════════════════
+  # Fusion Agent
+  # ══════════════════════════════════════════════════════════
+  fusion:
+    name: "fusion_agent"
+    type: "fusion"
+    enabled: true
+    config:
+      # Fusion strategy: "rrf", "weighted", "zscore"
+      strategy: "rrf"
+      
+      # Weights for weighted fusion (must sum to 1.0)
+      weights:
+        bm25: 0.3
+        dense: 0.1
+        graphrag: 0.6
+      
+      # RRF parameter (k in RRF formula)
+      rrf_k: 60
+      
+      # Deduplication
+      deduplicate: true
+      
+      # Final number of results
+      top_k: 20
+  
+  # ══════════════════════════════════════════════════════════
+  # Reranker Agent
+  # ══════════════════════════════════════════════════════════
+  reranker:
+    name: "reranker"
+    type: "reranker"
+    enabled: true
+    config:
+      # Reranking model (choose one)
+      # Options: "cohere", "openai", "gte", "local"
+      reranker_type: "cohere"
+      
+      # Model-specific settings
+      cohere:
+        model: "rerank-english-v3.0"
+        api_key_env: "COHERE_API_KEY"
+        max_chunks_per_doc: 10
+        
+      openai:
+        model: "gpt-4o-mini"
+        api_key_env: "OPENAI_API_KEY"
+        
+      gte:
+        model_name: "Alibaba-NLP/gte-large-en-v1.5"
+        
+      local:
+        model_name: "BAAI/bge-reranker-large"
+      
+      # Number of results to rerank (rerank top-k from fusion)
+      rerank_top_k: 20
+      
+      # Final number of results
+      output_top_k: 10
+  
+  # ══════════════════════════════════════════════════════════
+  # Answer Synthesizer Agent
+  # ══════════════════════════════════════════════════════════
+  synthesizer:
+    name: "answer_synthesizer"
+    type: "synthesizer"
+    enabled: true
+    config:
+      # LLM settings
+      model: "gpt-4o"
+      api_key_env: "OPENAI_API_KEY"
+      
+      # Context settings
+      max_context_chunks: 5
+      max_context_tokens: 4000
+      
+      # Generation settings
+      temperature: 0.3
+      max_tokens: 500
+      
+      # Prompting
+      include_metadata: true  # Include doc dates, sources in context
+      include_citations: true  # Ask LLM to cite sources
+      
+      # Language handling
+      answer_in_query_language: true
+  
+  # ══════════════════════════════════════════════════════════
+  # Critic Agent
+  # ══════════════════════════════════════════════════════════
+  critic:
+    name: "critic_agent"
+    type: "critic"
+    enabled: true
+    config:
+      # Quality thresholds
+      min_confidence: 0.6
+      min_relevance: 0.5
+      
+      # Verification method
+      # Options: "llm", "similarity", "keyword"
+      verification_method: "llm"
+      
+      # LLM settings (if using LLM verification)
+      model: "gpt-4o-mini"
+      api_key_env: "OPENAI_API_KEY"
+      
+      # Re-retrieval triggers
+      trigger_reretrival: true
+      max_reretrieval_attempts: 3
+
+# ══════════════════════════════════════════════════════════════
+# Orchestrator Configurations
+# ══════════════════════════════════════════════════════════════
+
+orchestrators:
+  
+  # Parallel + Fusion orchestrator
+  parallel_fusion:
+    enabled: true
+    agents:
+      - query_understanding
+      - bm25_retriever
+      - dense_retriever
+      - graphrag_retriever
+      - fusion
+      - reranker
+      - synthesizer
+    
+    # Run retrievers in parallel
+    parallel_retrieval: true
+    
+  # Critic Loop orchestrator
+  critic_loop:
+    enabled: true
+    agents:
+      - query_understanding
+      - bm25_retriever  # Initial retriever
+      - dense_retriever
+      - graphrag_retriever
+      - reranker
+      - synthesizer
+      - critic
+    
+    # Initial retrieval strategy
+    initial_retriever: "bm25_retriever"
+    
+    # Fallback retrievers (in order)
+    fallback_retrievers:
+      - "dense_retriever"
+      - "graphrag_retriever"
+    
+    # Loop settings
+    max_iterations: 3
+    confidence_threshold: 0.7
+
+# ══════════════════════════════════════════════════════════════
+# Evaluation Settings
+# ══════════════════════════════════════════════════════════════
+
+evaluation:
+  # Benchmark questions path
+  benchmark_path: "benchmark/benchmark_qa_bilingual_with_semantic_chunks.json"
+  
+  # Metrics to compute
+  metrics:
+    - "precision@5"
+    - "precision@10"
+    - "recall@5"
+    - "recall@10"
+    - "mrr"
+    - "ndcg@10"
+  
+  # Output
+  results_dir: "evaluation/results"
+  save_detailed_results: true
