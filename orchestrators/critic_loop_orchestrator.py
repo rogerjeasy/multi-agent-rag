@@ -11,9 +11,10 @@ from langchain.llms.base import BaseLLM
 from typing import Any
 import logging
 
-# Assuming base orchestrator is defined 
+# Import base orchestrator
+from orchestrators.base_orchestrator import BaseOrchestrator
 
-class CriticLoopOrchestrator:
+class CriticLoopOrchestrator(BaseOrchestrator):
     def __init__(
         self,
         llm: BaseLLM,
