@@ -1,5 +1,5 @@
 
-
+# DB - Needs to be adapted once answer synthesizer agent is implemented
 # ADDING A CRITIC LOOP
 ## 1) Generator to produce an initial draft answer based on the retrieved documents
 ## 2) Implementation of an LLM prompt to check the draft for missing info, inaccuracies, hallucinations
@@ -11,84 +11,70 @@ from langchain.llms.base import BaseLLM
 from typing import Any
 import logging
 
-# Import base orchestrator
+# Import of orchestrator
 from orchestrators.base_orchestrator import BaseOrchestrator
+from agents.base_agent import AgentMessage, create_agent_message, ProcessingError
 
-class CriticLoopOrchestrator(BaseOrchestrator):
-    def __init__(
-        self,
-        llm: BaseLLM,
-        retriever: Any,
-        max_iterations: int = 3,
-    ):
-        super().__init__(llm, retriever)
-        self.llm = llm
-        self.retriever = retriever
-        self.max_iterations = max_iterations
+ # Takes config_path, vs llm/retriever directly
+    def __init__(self, config_path: str):
+        super().__init__(config_path)
+        
+        # Load orchestrator settings from config
+        orch_config = self.config.get('orchestrators', {}).get('critic_loop', {})
+        if not orch_config.get('enabled', False):
+            self.logger.warning("Critic Loop Orchestrator is disabled in config")
+        
+        self.max_iterations = orch_config.get('max_iterations', 3)
+        self.initial_retriever_name = orch_config.get('initial_retriever', 'bm25_retriever')
+        
+        #Validate that required agents exist
+        required_agents = [self.initial_retriever_name, 'synthesizer', 'critic']
+        for agent_name in required_agents:
+            if not self.has_agent(agent_name):
+                self.logger.error(f"Required agent '{agent_name}' not found for CriticLoopOrchestrator")
 
-        prompt_template = """You are an expert assistant. 
+    # Process_query to match BaseOrchestrator abstract method
+    def process_query(self, query: str, language: str = "en", **kwargs) -> AgentMessage:
+        self.logger.info(f"Starting Critic Loop for query: {query}")
         
-        Context information is :
-        {context}
+        # 1.Start
+        message = create_agent_message(query=query, language=language)
         
-        Previous feedback (if any):
-        {feedback}
-        
-        Based on the context and feedback provided above, generate a answer to the question:
-        {question}
-        
-        Answer:"""
-        
-        generator_prompt = PromptTemplate(
-            template=prompt_template,
-            input_variables=["question", "context", "feedback"]
-        )
-        self.generator_chain = LLMChain(llm=llm, prompt=generator_prompt)
-
-        # ### OPTIMIZED: Enforced strict output format for the Critic.
-        # This prevents parsing errors where the model talks vaguely.
-        critic_prompt_template = """You are a critic. Review the draft answer against the provided documents.
-        
-        Documents: {context}
-        Draft Answer: {draft_answer}
-        
-        Check for:
-        1. Missing information
-        2. Hallucinations
-        3. Inaccuracies
-        """
-        
-        critic_prompt = PromptTemplate(
-            template=critic_prompt_template,
-            input_variables=["context", "draft_answer"]
-        )
-        self.critic_chain = LLMChain(llm=llm, prompt=critic_prompt)
-
-    def run(self, question: str) -> str:
-        documents = self.retriever.get_relevant_documents(question)
-        context = "\n".join([doc.page_content for doc in documents])
-        
-        current_feedback = "None." 
-        draft_answer = ""
-
-        for iteration in range(self.max_iterations):
-            logging.info(f"--- Iteration {iteration + 1} ---")
+        # 2.Retrieve documents
+        retriever = self.get_agent(self.initial_retriever_name)
+        if not retriever:
+            raise ProcessingError("Orchestrator", f"Retriever {self.initial_retriever_name} missing")
             
-            draft_answer = self.generator_chain.run(
-                question=question, 
-                context=context, 
-                feedback=current_feedback
-            )
+        message = retriever.process(message)
+        self.logger.info(f"Retrieved {len(message.results)} documents")
 
-            critique = self.critic_chain.run(context=context, draft_answer=draft_answer)
+        # 3. Critique
+        current_feedback = "None"
+        
+        synthesizer = self.get_agent('synthesizer')
+        critic = self.get_agent('critic')
+
+        for i in range(self.max_iterations):
+            self.logger.info(f"--- Iteration {i + 1} ---")
             
-            if "STATUS: PASS" in critique.upper():
-                logging.info(f"Draft answer accepted post iteration {iteration + 1}.")
-                return draft_answer
+            message.agent_data['previous_feedback'] = current_feedback
+            message.agent_data['is_revision'] = (i > 0)
+            
+            # 1) Create draft
+            message = synthesizer.process(message)
+            
+            # 2) Critique
+            message = critic.process(message)
+            
+            status = message.agent_data.get('critique_status', 'FAIL')
+            feedback = message.agent_data.get('critique_feedback', 'No feedback provided.')
+            
+            if status == "PASS":
+                self.logger.info(f"Draft accepted at iteration {i + 1}")
+                return message
             else:
-                current_feedback = critique.replace("STATUS: FAIL", "").strip()
-                logging.info(f"Draft rejected. Feedback: {current_feedback}")
-                logging.info("Revising...")
-
-        logging.warning("Max iterations reached. Returning last draft")
-        return draft_answer
+                current_feedback = feedback
+                self.logger.info(f"Draft rejected. Feedback: {current_feedback}")
+        
+        self.logger.warning("Max iterations reached. Returning best effort.")
+        return message
