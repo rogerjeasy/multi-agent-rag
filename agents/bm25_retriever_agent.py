@@ -42,8 +42,6 @@ class BM25RetrieverAgent(BaseAgent):
         
         self.index_path = Path(index_path)
         self.top_k = config.extra_config.get("top_k", 20)
-        self.k1 = config.extra_config.get("k1", 1.2)
-        self.b = config.extra_config.get("b", 0.75)
         
         # Load BM25 index
         self.bm25_index = self._load_index()
@@ -99,14 +97,15 @@ class BM25RetrieverAgent(BaseAgent):
         """Execute BM25 retrieval"""
         query = message.query
         
-        # Detect language and update context
-        detected_lang = self._detect_language(query)
-        message.context.language = Language(detected_lang)
+        # Detect language and update context (if not already set)
+        if not message.context.language:
+            detected_lang = self._detect_language(query)
+            message.context.language = Language(detected_lang)
         
         self.logger.debug(
             "Executing BM25 search",
             query=query,
-            language=detected_lang,
+            language=message.context.language.value if message.context.language else "en",
             top_k=self.top_k
         )
         
