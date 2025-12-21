@@ -149,16 +149,14 @@ print(f"Total time: {result.provenance.execution_time_ms:.2f}ms")
 - [x] Caching system
 - [x] Testing utilities
 - [x] Documentation
-
-### 🚧 In Progress
-- [ ] BM25 Retriever Agent
-- [ ] Dense Retriever Agent
-- [ ] GraphRAG Retriever Agent
-- [ ] Fusion Agent
-- [ ] Reranker Agent
-- [ ] Answer Synthesizer Agent
-- [ ] Critic Agent
-- [ ] Query Understanding Agent
+- [x] BM25 Retriever Agent
+- [x] Dense Retriever Agent
+- [x] GraphRAG Retriever Agent
+- [x] Fusion Agent
+- [x] Reranker Agent
+- [x] Answer Synthesizer Agent
+- [x] Critic Agent
+- [x] Query Understanding Agent
 
 ### 📋 Todo
 - [ ] Parallel Fusion Orchestrator
