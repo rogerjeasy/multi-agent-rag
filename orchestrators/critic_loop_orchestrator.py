@@ -10,16 +10,7 @@ from agents.base_agent import AgentMessage, create_agent_message, ProcessingErro
 
 # Class definition
 class CriticLoopOrchestrator(BaseOrchestrator):
-    """
-    Orchestrator that implements a Critique-Refine loop.
-    
-    Flow:
-    1. Retrieve documents using a configured retriever.
-    2. Generate a draft answer (Synthesizer Agent).
-    3. Critique the draft (Critic Agent). 
-    4. If critique fails, pass feedback to Synthesizer and repeat.
-    5. Return final message.
-    """
+
     
     def __init__(self, config_path: str):
         super().__init__(config_path)
