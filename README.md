@@ -159,8 +159,8 @@ print(f"Total time: {result.provenance.execution_time_ms:.2f}ms")
 - [x] Query Understanding Agent
 
 ### 📋 Todo
-- [ ] Parallel Fusion Orchestrator
-- [ ] Critic Loop Orchestrator
+- [x] Parallel Fusion Orchestrator
+- [x] Critic Loop Orchestrator
 - [ ] Evaluation pipeline
 - [ ] Benchmark on 25 questions
 - [ ] Final report
