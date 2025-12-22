@@ -1,1 +1,90 @@
 
+
+from typing import List, Optional
+import logging
+
+# Import base classes and protocols
+from orchestrators.base_orchestrator import BaseOrchestrator
+from agents.base_agent import (
+    AgentMessage, 
+    create_agent_message, 
+    ProcessingError, 
+    QueryType
+)
+
+class SemanticRoutingOrchestrator(BaseOrchestrator):
+    def __init__(self, config_path: str):
+        super().__init__(config_path)
+        
+        required_agents = ['query_understanding', 'synthesizer']
+        for agent in required_agents:
+            if not self.has_agent(agent):
+                self.logger.warning(f"Critical agent '{agent}' missing for Routing Pipeline!")
+
+    def process_query(self, query: str, language: str = "en", **kwargs) -> AgentMessage:
+        self.logger.info(f"Starting Semantic Routing Pipeline for: {query}")
+        
+        message = create_agent_message(query=query, language=language)
+        
+        # 1. Query understanding
+        if self.has_agent('query_understanding'):
+            self.logger.info("Analyzing query intent...")
+            query_agent = self.get_agent('query_understanding')
+            message = query_agent.process(message)
+        else:
+            # Fallback if understanding is missing
+            message.context.query_type = QueryType.UNKNOWN
+        
+        q_type = message.context.query_type
+        self.logger.info(f"Query classified as: {q_type.value.upper()}")
+        
+        # 2. Conditional routing
+        selected_retriever = self._route_query(message)
+        
+        # 3. Execution
+        if selected_retriever and self.has_agent(selected_retriever):
+            self.logger.info(f"Routing to -> {selected_retriever.upper()}")
+            
+            retriever = self.get_agent(selected_retriever)
+            message = retriever.process(message)                
+        else:
+            self.logger.error(f"Selected retriever '{selected_retriever}' is not available.")
+            raise ProcessingError("Router", f"Could not route query type {q_type}")
+
+        # 4. Synthesis
+        if self.has_agent('synthesizer'):
+            self.logger.info("Synthesizing answer...")
+            synthesizer_agent = self.get_agent('synthesizer')
+            message = synthesizer_agent.process(message)
+        
+        self.logger.info(f"Pipeline completed. Time: {message.provenance.execution_time_ms:.2f}ms")
+        return message
+
+    def _route_query(self, message: AgentMessage) -> str:
+        """Decides which retriever to use based on query type and entities"""
+        q_type = message.context.query_type
+        
+        # STRATEGY 1: If the query is about entities/relationships, use GraphRAG
+        if message.context.entities and self.has_agent('graphrag_retriever'):
+            # Prefer GraphRAG for queries with named entities
+            return 'graphrag_retriever'
+
+        # STRATEGY 2: Query type mapping
+        
+        # 2A: Exact keyword match needed (Who, When, What date)
+        if q_type in [QueryType.FACTUAL, QueryType.TEMPORAL, QueryType.PROCEDURAL, QueryType.LIST]:
+            if self.has_agent('bm25_retriever'):
+                return 'bm25_retriever'
+        
+        # 2B: Conceptual/semantic needed (Why, How, Compare)
+        elif q_type in [QueryType.ANALYTICAL, QueryType.COMPARATIVE, QueryType.DEFINITION]:
+            if self.has_agent('dense_retriever'):
+                return 'dense_retriever'
+
+        #STRATEGY 3: default to dense if the preferred choice failed or type is unknown
+        if self.has_agent('dense_retriever'):
+            return 'dense_retriever'
+        elif self.has_agent('bm25_retriever'):
+            return 'bm25_retriever'
+        
+        return None
